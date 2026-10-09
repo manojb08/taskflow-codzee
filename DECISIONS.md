@@ -13,11 +13,12 @@ Technical decisions, assumptions, alternatives considered, and tradeoffs made wh
 - Why: `localStorage` is readable by any script on the page — an XSS bug anywhere in the app (or a dependency) can exfiltrate a long-lived token. Keeping it in memory means a page refresh loses it, which is why the refresh-cookie flow exists (silent re-auth on load via `/auth/refresh`).
 - Tradeoff: a hard refresh briefly shows a loading spinner while the app re-authenticates. Acceptable for an internal tool.
 
-**Any authenticated user can view, edit, assign, or delete any task.**
+**Any authenticated user can view, edit, or assign any task; only its creator or an admin can delete it.**
 - Assumption: the brief describes "a small engineering team" using an internal tool — the realistic failure mode there is not malicious teammates, it's accidental overreach, which isn't solved by ACLs anyway.
 - Alternative considered: only the creator or assignee can edit/delete a task.
-- Why not: the reference design's task list shows a delete action on every row regardless of who created it, and building real RBAC wasn't asked for in §5. Documented here rather than silently generalized.
-- Where I *did* restrict: comment deletion is author-or-admin only, because comments are personal statements ("Sarah said X") in a way task fields aren't, and it was a small addition once `role` existed on the user model.
+- Why not, for edits: building real RBAC wasn't asked for in §5, and a bad edit can simply be edited back (status/priority/assignee/due-date changes also show up in the activity log). Documented here rather than silently generalized.
+- Revised, for deletes: deletion originally followed the same open rule, because the reference design's task list shows a delete action on every row. It's now creator-or-admin — the same rule comments use — because deletion is the one task operation that can't be undone, and it also destroys every teammate's comments on the task. That's exactly the "accidental overreach" named above. The UI only offers Delete to users who can use it; the API enforces the rule regardless (`403 FORBIDDEN`).
+- Where I *did* restrict from the start: comment deletion is author-or-admin only, because comments are personal statements ("Sarah said X") in a way task fields aren't, and it was a small addition once `role` existed on the user model.
 
 **Registration is open, and there's also an admin-gated invite flow.**
 - The brief only needs "at least two users" to demonstrate assignment, so open self-registration alone would have satisfied §5. An admin "Invite Member" path was added afterward (see "Round 2" below) as a more realistic onboarding story for an internal tool — but self-registration was kept rather than removed, since closing it would need an explicit product decision ("is this tool invite-only?") the brief never makes.

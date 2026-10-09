@@ -8,6 +8,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { StatusBadge } from './StatusBadge'
 import { PriorityBadge } from './PriorityBadge'
 import { UserAvatar } from '@/components/common/UserAvatar'
+import { useAuth } from '@/context/AuthContext'
+import { canDeleteTask } from '@/lib/permissions'
 import type { Task } from '@/types'
 
 interface TaskTableProps {
@@ -32,6 +34,7 @@ export function TaskTable({
   hasActiveFilters,
 }: TaskTableProps) {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   if (error) {
     return (
@@ -98,9 +101,11 @@ export function TaskTable({
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           <DropdownMenuItem onSelect={() => navigate(`/tasks/${task._id}?edit=1`)}>Edit task</DropdownMenuItem>
-          <DropdownMenuItem destructive onSelect={() => onDeleteRequest(task)}>
-            Delete task
-          </DropdownMenuItem>
+          {canDeleteTask(user, task) && (
+            <DropdownMenuItem destructive onSelect={() => onDeleteRequest(task)}>
+              Delete task
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     )

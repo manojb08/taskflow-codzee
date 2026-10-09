@@ -140,11 +140,19 @@ export const updateTask = asyncHandler(async (req: AuthenticatedRequest, res) =>
   res.json({ success: true, data: { task } });
 });
 
-export const deleteTask = asyncHandler(async (req, res) => {
-  const task = await Task.findByIdAndDelete(req.params.id);
+export const deleteTask = asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const task = await Task.findById(req.params.id);
   if (!task) {
     throw ApiError.notFound('Task not found');
   }
+
+  const isCreator = task.creator.toString() === req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+  if (!isCreator && !isAdmin) {
+    throw ApiError.forbidden('Only the task creator or an admin can delete this task');
+  }
+
+  await task.deleteOne();
   await Comment.deleteMany({ task: task._id });
   broadcast('task:deleted', { taskId: task._id });
   res.json({ success: true, data: { deleted: true } });

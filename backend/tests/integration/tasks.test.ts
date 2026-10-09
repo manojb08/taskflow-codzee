@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { createApp } from '../../src/app';
-import { createAuthedUser } from '../utils/testAuth';
+import { createAuthedAdmin, createAuthedUser } from '../utils/testAuth';
 
 const app = createApp();
 
@@ -97,6 +97,49 @@ describe('Tasks', () => {
       .get(`/api/v1/tasks/${taskId}/comments`)
       .set('Authorization', `Bearer ${token}`);
     expect(comments.status).toBe(404); // task itself no longer exists
+  });
+
+  it('blocks a member from deleting a task someone else created', async () => {
+    const creator = await createAuthedUser(app, { email: 'task-owner@taskflow.io' });
+    const otherMember = await createAuthedUser(app, { email: 'not-the-owner@taskflow.io' });
+    const created = await request(app)
+      .post('/api/v1/tasks')
+      .set('Authorization', `Bearer ${creator.token}`)
+      .send({ title: 'Not yours to delete' });
+    const taskId = created.body.data.task._id;
+
+    const del = await request(app)
+      .delete(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${otherMember.token}`);
+    expect(del.status).toBe(403);
+    expect(del.body.error.code).toBe('FORBIDDEN');
+
+    const stillThere = await request(app)
+      .get(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${creator.token}`);
+    expect(stillThere.status).toBe(200);
+  });
+
+  it('lets an admin delete a task someone else created', async () => {
+    const creator = await createAuthedUser(app, { email: 'member-owner@taskflow.io' });
+    const admin = await createAuthedAdmin(app, { email: 'task-admin@taskflow.io' });
+    const created = await request(app)
+      .post('/api/v1/tasks')
+      .set('Authorization', `Bearer ${creator.token}`)
+      .send({ title: 'Cleaned up by an admin' });
+
+    const del = await request(app)
+      .delete(`/api/v1/tasks/${created.body.data.task._id}`)
+      .set('Authorization', `Bearer ${admin.token}`);
+    expect(del.status).toBe(200);
+  });
+
+  it('returns 404 when deleting a task that does not exist', async () => {
+    const { token } = await createAuthedUser(app);
+    const res = await request(app)
+      .delete('/api/v1/tasks/64b64b64b64b64b64b64b64b')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
   });
 
   describe('list, search, filter, sort, paginate', () => {

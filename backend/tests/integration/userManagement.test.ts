@@ -1,19 +1,8 @@
 import request from 'supertest';
 import { createApp } from '../../src/app';
-import { createAuthedUser } from '../utils/testAuth';
-import { User } from '../../src/models/User';
-import { signAccessToken } from '../../src/utils/jwt';
+import { createAuthedAdmin, createAuthedUser } from '../utils/testAuth';
 
 const app = createApp();
-
-async function createAuthedAdmin(overrides: Partial<{ name: string; email: string }> = {}) {
-  const authed = await createAuthedUser(app, overrides);
-  await User.findByIdAndUpdate(authed.user._id, { role: 'admin' });
-  // The access token issued at registration still encodes the old role; mint a fresh one directly
-  // rather than re-authenticating through /login, which would also consume the shared authLimiter.
-  const token = signAccessToken({ sub: authed.user._id, role: 'admin' });
-  return { token, user: { ...authed.user, role: 'admin' } };
-}
 
 describe('User management', () => {
   describe('POST /users (invite)', () => {
@@ -38,7 +27,7 @@ describe('User management', () => {
     });
 
     it('lets an admin invite a user and returns an inviteToken/inviteUrl', async () => {
-      const { token } = await createAuthedAdmin({ email: 'admin1@taskflow.io' });
+      const { token } = await createAuthedAdmin(app, { email: 'admin1@taskflow.io' });
 
       const res = await request(app)
         .post('/api/v1/users')
@@ -56,7 +45,7 @@ describe('User management', () => {
     });
 
     it('rejects inviting an email that is already registered', async () => {
-      const { token } = await createAuthedAdmin({ email: 'admin2@taskflow.io' });
+      const { token } = await createAuthedAdmin(app, { email: 'admin2@taskflow.io' });
       await createAuthedUser(app, { email: 'existing@taskflow.io' });
 
       const res = await request(app)
@@ -69,7 +58,7 @@ describe('User management', () => {
     });
 
     it('cannot log in as the invited user with a guessed or empty password', async () => {
-      const { token } = await createAuthedAdmin({ email: 'admin3@taskflow.io' });
+      const { token } = await createAuthedAdmin(app, { email: 'admin3@taskflow.io' });
       const inviteRes = await request(app)
         .post('/api/v1/users')
         .set('Authorization', `Bearer ${token}`)
