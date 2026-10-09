@@ -49,6 +49,8 @@ npm run seed             # creates 2 demo users + 1 sample task
 npm run dev               # http://localhost:4000
 ```
 
+Upgrading a database created before tasks had a `completedAt` field? Run `npm run backfill:completed-at` once so tasks that were already done keep a completion date.
+
 Seeded accounts (for testing task assignment, and admin-only features like inviting members):
 
 | Email | Password | Role |
@@ -70,8 +72,8 @@ Open `http://localhost:5173`, log in with either seeded account.
 ### Running tests
 
 ```bash
-cd backend && npm test      # 42 integration tests against an in-memory MongoDB
-cd frontend && npm test      # 20 component/unit tests
+cd backend && npm test      # integration tests against an in-memory MongoDB
+cd frontend && npm test      # component/unit tests
 ```
 
 ## Environment variables

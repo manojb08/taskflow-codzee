@@ -15,6 +15,7 @@ export interface ITask extends Document {
   assignee?: Types.ObjectId | null;
   creator: Types.ObjectId;
   dueDate?: Date | null;
+  completedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +29,9 @@ const taskSchema = new Schema<ITask>(
     assignee: { type: Schema.Types.ObjectId, ref: 'User', default: null, index: true },
     creator: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     dueDate: { type: Date, default: null },
+    // Set when the task moves to `done`, cleared when it moves out. `updatedAt` can't stand in for
+    // this: any later edit bumps it.
+    completedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

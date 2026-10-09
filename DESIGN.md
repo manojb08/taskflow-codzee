@@ -53,6 +53,7 @@ This document describes the system design for the assessment: a multi-user task 
 | `assignee` | ObjectId ref `User` | nullable (unassigned allowed) |
 | `creator` | ObjectId ref `User` | required, set from authenticated user, immutable |
 | `dueDate` | Date | optional |
+| `completedAt` | Date | set when status moves to `done`, cleared when it moves out; drives the dashboard's "completed this week" |
 | `createdAt` / `updatedAt` | Date | timestamps (Mongoose auto) |
 
 Indexes: `{ status: 1 }`, `{ priority: 1 }`, `{ assignee: 1 }`, text index on `{ title: 'text', description: 'text' }` for search.

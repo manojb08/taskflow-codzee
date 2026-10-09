@@ -1,8 +1,10 @@
 import request from 'supertest';
 import { createApp } from '../../src/app';
+import { Task } from '../../src/models/Task';
 import { createAuthedUser } from '../utils/testAuth';
 
 const app = createApp();
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe('Dashboard stats', () => {
   it('does not 400 (confirms /stats/summary is not swallowed by /:id)', async () => {
@@ -68,6 +70,39 @@ describe('Dashboard stats', () => {
       .get('/api/v1/tasks/stats/summary')
       .set('Authorization', `Bearer ${userB.token}`);
     expect(statsB.body.data.assignedToMeTodoCount).toBe(1);
+  });
+
+  it('counts completedThisWeek by when a task was finished, not when it was last edited', async () => {
+    const { token } = await createAuthedUser(app);
+
+    // Finished a month ago, then edited today: must not count as completed this week.
+    const oldTask = await request(app)
+      .post('/api/v1/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Finished last month', status: 'done' });
+    const oldTaskId = oldTask.body.data.task._id;
+    await Task.updateOne({ _id: oldTaskId }, { completedAt: new Date(Date.now() - 30 * DAY_MS) });
+    await request(app)
+      .patch(`/api/v1/tasks/${oldTaskId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Finished last month (typo fixed)' });
+
+    // Finished today.
+    const newTask = await request(app)
+      .post('/api/v1/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Started today' });
+    await request(app)
+      .patch(`/api/v1/tasks/${newTask.body.data.task._id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'done' });
+
+    const res = await request(app)
+      .get('/api/v1/tasks/stats/summary')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.body.data.done).toBe(2);
+    expect(res.body.data.completedThisWeek).toBe(1);
   });
 
   it('rejects unauthenticated requests', async () => {

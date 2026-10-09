@@ -47,7 +47,11 @@ export const listTasks = asyncHandler(async (req: AuthenticatedRequest, res) => 
 });
 
 export const createTask = asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const task = await Task.create({ ...req.body, creator: req.user!.id });
+  const task = await Task.create({
+    ...req.body,
+    creator: req.user!.id,
+    completedAt: req.body.status === 'done' ? new Date() : null,
+  });
   await logActivity({ task: task._id, actor: req.user!.id, action: 'created' });
   const populated = await task.populate([
     { path: 'assignee', select: 'name email' },
@@ -69,26 +73,32 @@ export const getTask = asyncHandler(async (req, res) => {
 
 export const updateTask = asyncHandler(async (req: AuthenticatedRequest, res) => {
   const existing = await Task.findById(req.params.id);
-
-  const task = await Task.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-    runValidators: true,
-  })
-    .populate('assignee', 'name email')
-    .populate('creator', 'name email');
-  if (!task || !existing) {
+  if (!existing) {
     throw ApiError.notFound('Task not found');
   }
 
-  const actor = req.user!.id;
   const body = req.body as Partial<{
     status: string;
     priority: string;
     assignee: string | null;
     dueDate: Date | null;
   }>;
+  const statusChanged = 'status' in body && body.status !== existing.status;
+  const update = statusChanged ? { ...body, completedAt: body.status === 'done' ? new Date() : null } : body;
 
-  if ('status' in body && body.status !== existing.status) {
+  const task = await Task.findByIdAndUpdate(req.params.id, update, {
+    new: true,
+    runValidators: true,
+  })
+    .populate('assignee', 'name email')
+    .populate('creator', 'name email');
+  if (!task) {
+    throw ApiError.notFound('Task not found');
+  }
+
+  const actor = req.user!.id;
+
+  if (statusChanged) {
     await logActivity({
       task: task._id,
       actor,
@@ -174,7 +184,7 @@ export const getTaskStats = asyncHandler(async (req: AuthenticatedRequest, res) 
     Task.countDocuments({ status: 'done' }),
     Task.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
     Task.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
-    Task.countDocuments({ status: 'done', updatedAt: { $gte: sevenDaysAgo } }),
+    Task.countDocuments({ status: 'done', completedAt: { $gte: sevenDaysAgo } }),
     Task.countDocuments({ dueDate: { $gte: now, $lte: sevenDaysFromNow }, status: { $ne: 'done' } }),
     Task.countDocuments({ assignee: req.user!.id, status: 'todo' }),
   ]);
