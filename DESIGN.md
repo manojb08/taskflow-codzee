@@ -119,7 +119,7 @@ All responses use a consistent envelope:
 | GET | `/tasks/stats/summary` | Bearer | Dashboard metrics (counts, week-over-week trend, due-this-week, assigned-to-me) — registered before `/tasks/:id` so it isn't captured as an id |
 | GET | `/tasks/:id` | Bearer | Task detail |
 | PATCH | `/tasks/:id` | Bearer | Partial update (title/description/status/priority/assignee/dueDate); logs an ActivityLog entry per changed field |
-| DELETE | `/tasks/:id` | Bearer | Delete task — creator or admin only, otherwise `403` (cascades: deletes its comments) |
+| DELETE | `/tasks/:id` | Bearer | Delete task — creator or admin only, otherwise `403` (cascades: deletes its comments and activity) |
 | GET | `/tasks/:id/activity` | Bearer | Task's activity trail, newest first |
 
 ### Comments
