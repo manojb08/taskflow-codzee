@@ -21,6 +21,8 @@ import { CommentComposer } from '@/components/comments/CommentComposer'
 import { ActivityFeed } from '@/components/tasks/ActivityFeed'
 import { useUsers } from '@/hooks/useUsers'
 import { useMyTasksCount } from '@/hooks/useMyTasksCount'
+import { useAuth } from '@/context/AuthContext'
+import { canDeleteTask } from '@/lib/permissions'
 import { useToast } from '@/components/ui/toast'
 import { getTask, updateTask } from '@/api/tasks'
 import { createComment, deleteComment, listComments } from '@/api/comments'
@@ -45,6 +47,7 @@ export function TaskDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { user } = useAuth()
   const { users } = useUsers()
   const myTasksCount = useMyTasksCount()
 
@@ -248,6 +251,8 @@ export function TaskDetailPage() {
     )
   }
 
+  const canDelete = canDeleteTask(user, task)
+
   if (isEditing) {
     return (
       <AppShell breadcrumb={`Edit ${breadcrumb}`} myTasksCount={myTasksCount}>
@@ -302,15 +307,17 @@ export function TaskDetailPage() {
               </div>
             )}
 
-            <div className="rounded-[10px] border border-destructive/20 bg-destructive-bg p-4">
-              <p className="mb-1 text-sm font-semibold text-destructive">Danger zone</p>
-              <p className="mb-3 text-xs text-destructive/80">
-                Deleting a task removes its comments and activity. This can&apos;t be undone.
-              </p>
-              <Button variant="destructive" size="sm" className="w-full" onClick={() => setDeleteOpen(true)}>
-                Delete task
-              </Button>
-            </div>
+            {canDelete && (
+              <div className="rounded-[10px] border border-destructive/20 bg-destructive-bg p-4">
+                <p className="mb-1 text-sm font-semibold text-destructive">Danger zone</p>
+                <p className="mb-3 text-xs text-destructive/80">
+                  Deleting a task removes its comments and activity. This can&apos;t be undone.
+                </p>
+                <Button variant="destructive" size="sm" className="w-full" onClick={() => setDeleteOpen(true)}>
+                  Delete task
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -363,9 +370,11 @@ export function TaskDetailPage() {
                   <DropdownMenuItem onSelect={enterEdit}>
                     <Pencil className="h-3.5 w-3.5" /> Edit task
                   </DropdownMenuItem>
-                  <DropdownMenuItem destructive onSelect={() => setDeleteOpen(true)}>
-                    <Trash2 className="h-3.5 w-3.5" /> Delete task
-                  </DropdownMenuItem>
+                  {canDelete && (
+                    <DropdownMenuItem destructive onSelect={() => setDeleteOpen(true)}>
+                      <Trash2 className="h-3.5 w-3.5" /> Delete task
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

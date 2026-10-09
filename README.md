@@ -137,7 +137,7 @@ Responses use a consistent envelope: `{ success, data, meta? }` or `{ success: f
 Documented as deliberate scope decisions in [DECISIONS.md](./DECISIONS.md) — the short version:
 
 - **No notification delivery.** Tasks/comments now sync live across open tabs/sessions via Socket.io (see below), but there's no persisted, per-user notification feed — the bell icon and @mentions don't push anything yet.
-- **Role model is minimal.** Any authenticated user can edit/assign/delete any task (matches "small trusted team"); comment deletion is restricted to the author or an admin; inviting new members is admin-only.
+- **Role model is minimal.** Any authenticated user can edit/assign any task (matches "small trusted team"); deleting a task is restricted to its creator or an admin, as is deleting a comment; inviting new members is admin-only.
 - **No real email delivery.** Invite and password-reset links are returned directly by the API (shown on-screen) rather than emailed, since there's no email service configured — clearly labeled as dev-only in the UI.
 - **Settings only supports editing your name.** Email (login identity) and role (admin-controlled) aren't self-service.
 - **No file attachments, sub-tasks, or kanban/drag-and-drop.**
