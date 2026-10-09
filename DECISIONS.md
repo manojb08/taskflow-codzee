@@ -40,6 +40,11 @@ Technical decisions, assumptions, alternatives considered, and tradeoffs made wh
 **`dueDate` is optional.**
 - Not listed as a required field in §5.2's minimum task fields; added because the reference design's Create/Edit Task forms include it, but nothing in the brief said every task must have one.
 
+**`completedAt` is stored, not inferred from `updatedAt`.**
+- The dashboard's "completed this week" originally counted `done` tasks whose `updatedAt` fell in the last 7 days. But *any* edit bumps `updatedAt`, so fixing a typo on a task finished months ago made it count as completed again.
+- `completedAt` is set when a task moves to `done` (or is created as `done`) and cleared when it moves out, so a reopened-then-finished task is dated from its latest completion. Re-saving the same status (which the edit form always does) leaves it alone.
+- Tasks already `done` before the field existed are backfilled once with `npm run backfill:completed-at`: the latest "moved to done" activity entry when there is one, otherwise `updatedAt` — the value the old query used, so no task ends up worse off than before.
+
 ## API design
 
 **Consistent response envelope (`{success, data, meta?}` / `{success:false, error}`) across every endpoint.**
