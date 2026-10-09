@@ -15,7 +15,8 @@ export async function backfillCompletedAt(): Promise<number> {
       .sort({ createdAt: -1 })
       .select('createdAt');
     await Task.updateOne(
-      { _id: task._id },
+      // Re-check on write: the task may have been reopened (or completed for real) since the find().
+      { _id: task._id, status: 'done', completedAt: null },
       { $set: { completedAt: lastMovedToDone?.createdAt ?? task.updatedAt } },
       // A backfill isn't an edit — leave updatedAt alone.
       { timestamps: false },

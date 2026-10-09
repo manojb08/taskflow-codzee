@@ -82,10 +82,11 @@ describe('Dashboard stats', () => {
       .send({ title: 'Finished last month', status: 'done' });
     const oldTaskId = oldTask.body.data.task._id;
     await Task.updateOne({ _id: oldTaskId }, { completedAt: new Date(Date.now() - 30 * DAY_MS) });
-    await request(app)
+    const edit = await request(app)
       .patch(`/api/v1/tasks/${oldTaskId}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ title: 'Finished last month (typo fixed)' });
+    expect(edit.status).toBe(200);
 
     // Finished today.
     const newTask = await request(app)

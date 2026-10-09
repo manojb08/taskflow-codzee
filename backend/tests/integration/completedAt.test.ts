@@ -29,7 +29,7 @@ describe('Task completedAt', () => {
     expect(open.completedAt).toBeNull();
   });
 
-  it('is set when a task moves to done and cleared when it is reopened', async () => {
+  it('is set when a task moves to done, cleared when reopened, and set again when finished again', async () => {
     const { token } = await createAuthedUser(app);
     const task = await createTask(token, { title: 'Ship it' });
 
@@ -38,15 +38,22 @@ describe('Task completedAt', () => {
 
     const reopened = await patchTask(token, task._id, { status: 'in_progress' });
     expect(reopened.completedAt).toBeNull();
+
+    const finishedAgain = await patchTask(token, task._id, { status: 'done' });
+    expect(finishedAgain.completedAt).toEqual(expect.any(String));
+    expect(new Date(finishedAgain.completedAt).getTime()).toBeGreaterThanOrEqual(new Date(done.completedAt).getTime());
   });
 
   it('keeps the original completion time when a done task is edited', async () => {
     const { token } = await createAuthedUser(app);
     const task = await createTask(token, { title: 'Finished earlier', status: 'done' });
+    // Backdate it, so re-stamping it with "now" can't pass by landing in the same millisecond.
+    const finishedAt = new Date('2026-09-01T10:00:00.000Z');
+    await Task.updateOne({ _id: task._id }, { completedAt: finishedAt });
 
     // The edit form always resends the current status, so this is the common case.
     const edited = await patchTask(token, task._id, { title: 'Finished earlier (renamed)', status: 'done' });
-    expect(edited.completedAt).toBe(task.completedAt);
+    expect(edited.completedAt).toBe(finishedAt.toISOString());
   });
 });
 
@@ -73,7 +80,11 @@ describe('backfillCompletedAt', () => {
       createdAt: at,
       updatedAt: at,
     });
-    await ActivityLog.collection.insertMany([moved('done', firstDone), moved('done', latestDone)]);
+    await ActivityLog.collection.insertMany([
+      moved('done', firstDone),
+      moved('done', latestDone),
+      moved('in_review', new Date('2026-09-05T10:00:00.000Z')), // later, but not a move to done
+    ]);
 
     expect(await backfillCompletedAt()).toBe(2);
 
