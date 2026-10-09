@@ -32,8 +32,10 @@ Technical decisions, assumptions, alternatives considered, and tradeoffs made wh
 - Alternative: embed comments as an array field on `Task`.
 - Why not: MongoDB documents have a 16MB cap and embedded arrays that grow unboundedly are a well-known anti-pattern; a separate collection also lets comments be paginated independently of the task and indexed on `task` for fast lookups.
 
-**Deleting a task cascades to delete its comments.**
+**Deleting a task cascades to delete its comments and its activity log.**
 - Assumption: orphaned comments referencing a deleted task have no product value and would just be dead data. The reference design's delete-confirmation dialog literally says "and its comments will be permanently removed" — so this was actually specified, not just assumed.
+- Activity entries were originally left behind, even though the edit page's danger zone already told users that deleting "removes its comments and activity". They're unreachable once the task is gone (the activity endpoint 404s), so they were pure dead data; they're now deleted alongside the comments.
+- Not atomic: the task is deleted first, then its comments and activity. A crash in between leaves orphans, which are invisible and harmless; the reverse order could lose a live task's comments. A transaction would close the gap, but it needs a replica set, which the local docker-compose MongoDB isn't.
 
 **`status` and `priority` are fixed enums, not a user-editable list.**
 - The brief's suggested values (Todo/In Progress/Done for status; Low/Medium/High for priority) were extended to match the reference design exactly: status gets a 5th value `in_review` and `blocked`; priority gets a 4th value `urgent`. Kept as backend-enforced enums (not free text) so filtering/sorting stay meaningful — a "make statuses configurable" feature was explicitly out of scope per §7 ("not every implementation detail is specified... use engineering judgment").

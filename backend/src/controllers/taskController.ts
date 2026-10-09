@@ -1,6 +1,7 @@
 import { FilterQuery, PipelineStage, Types } from 'mongoose';
 import { Task, ITask } from '../models/Task';
 import { Comment } from '../models/Comment';
+import { ActivityLog } from '../models/ActivityLog';
 import { User } from '../models/User';
 import { ApiError } from '../utils/ApiError';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -163,7 +164,7 @@ export const deleteTask = asyncHandler(async (req: AuthenticatedRequest, res) =>
   }
 
   await task.deleteOne();
-  await Comment.deleteMany({ task: task._id });
+  await Promise.all([Comment.deleteMany({ task: task._id }), ActivityLog.deleteMany({ task: task._id })]);
   broadcast('task:deleted', { taskId: task._id });
   res.json({ success: true, data: { deleted: true } });
 });

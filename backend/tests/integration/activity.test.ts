@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { createApp } from '../../src/app';
+import { ActivityLog } from '../../src/models/ActivityLog';
 import { createAuthedUser } from '../utils/testAuth';
 
 const app = createApp();
@@ -104,5 +105,23 @@ describe('Activity log', () => {
       .get('/api/v1/tasks/64b64b64b64b64b64b64b64b/activity')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(404);
+  });
+
+  it("deletes a task's activity along with the task, leaving other tasks' activity alone", async () => {
+    const { token } = await createAuthedUser(app);
+    const taskId = await createTask(app, token, 'Task to delete');
+    const otherTaskId = await createTask(app, token, 'Task to keep');
+    await request(app)
+      .patch(`/api/v1/tasks/${taskId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'in_progress' });
+    expect(await ActivityLog.countDocuments({ task: taskId })).toBe(2);
+
+    const del = await request(app).delete(`/api/v1/tasks/${taskId}`).set('Authorization', `Bearer ${token}`);
+    expect(del.status).toBe(200);
+
+    // The activity endpoint 404s once its task is gone, so check the collection directly.
+    expect(await ActivityLog.countDocuments({ task: taskId })).toBe(0);
+    expect(await ActivityLog.countDocuments({ task: otherTaskId })).toBe(1);
   });
 });
