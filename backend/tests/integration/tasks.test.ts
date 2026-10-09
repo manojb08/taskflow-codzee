@@ -132,6 +132,11 @@ describe('Tasks', () => {
       .delete(`/api/v1/tasks/${created.body.data.task._id}`)
       .set('Authorization', `Bearer ${admin.token}`);
     expect(del.status).toBe(200);
+
+    const gone = await request(app)
+      .get(`/api/v1/tasks/${created.body.data.task._id}`)
+      .set('Authorization', `Bearer ${creator.token}`);
+    expect(gone.status).toBe(404);
   });
 
   it('returns 404 when deleting a task that does not exist', async () => {
