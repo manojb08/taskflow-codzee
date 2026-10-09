@@ -1,4 +1,4 @@
-import { FilterQuery } from 'mongoose';
+import { FilterQuery, PipelineStage, Types } from 'mongoose';
 import { Task, ITask } from '../models/Task';
 import { Comment } from '../models/Comment';
 import { User } from '../models/User';
@@ -175,33 +175,49 @@ export const getTaskStats = asyncHandler(async (req: AuthenticatedRequest, res) 
   const fourteenDaysAgo = new Date(now.getTime() - 14 * oneDayMs);
   const sevenDaysFromNow = new Date(now.getTime() + 7 * oneDayMs);
 
-  const [
-    total,
-    todo,
-    inProgress,
-    done,
-    createdLast7Days,
-    createdPrev7Days,
-    completedThisWeek,
-    dueThisWeek,
-    assignedToMeTodoCount,
-  ] = await Promise.all([
-    Task.countDocuments({}),
-    Task.countDocuments({ status: 'todo' }),
-    Task.countDocuments({ status: 'in_progress' }),
-    Task.countDocuments({ status: 'done' }),
-    Task.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
-    Task.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
-    Task.countDocuments({ status: 'done', completedAt: { $gte: sevenDaysAgo } }),
-    Task.countDocuments({ dueDate: { $gte: now, $lte: sevenDaysFromNow }, status: { $ne: 'done' } }),
-    Task.countDocuments({ assignee: req.user!.id, status: 'todo' }),
-  ]);
+  // Each metric is a plain filter; all of them are counted in one $facet aggregation (one round trip
+  // instead of nine).
+  const metrics = {
+    total: {},
+    todo: { status: 'todo' },
+    inProgress: { status: 'in_progress' },
+    done: { status: 'done' },
+    createdLast7Days: { createdAt: { $gte: sevenDaysAgo } },
+    createdPrev7Days: { createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } },
+    completedThisWeek: { status: 'done', completedAt: { $gte: sevenDaysAgo } },
+    dueThisWeek: { dueDate: { $gte: now, $lte: sevenDaysFromNow }, status: { $ne: 'done' } },
+    // Unlike countDocuments(), aggregate() doesn't cast values through the schema, so this has to be
+    // an ObjectId already; the raw id string would silently match nothing.
+    assignedToMeTodoCount: { assignee: new Types.ObjectId(req.user!.id), status: 'todo' },
+  } satisfies Record<string, FilterQuery<ITask>>;
+  type Metric = keyof typeof metrics;
 
+  const facets = Object.fromEntries(
+    Object.entries(metrics).map(([name, match]): [string, PipelineStage.FacetPipelineStage[]] => [
+      name,
+      [{ $match: match }, { $count: 'n' }],
+    ]),
+  );
+  const [result] = await Task.aggregate<Record<Metric, { n: number }[]>>([{ $facet: facets }]);
+  // $count emits no document at all when nothing matches.
+  const count = (metric: Metric) => result[metric][0]?.n ?? 0;
+
+  const createdLast7Days = count('createdLast7Days');
+  const createdPrev7Days = count('createdPrev7Days');
   const totalTrendPct =
     createdPrev7Days === 0 ? null : Math.round(((createdLast7Days - createdPrev7Days) / createdPrev7Days) * 100);
 
   res.json({
     success: true,
-    data: { total, todo, inProgress, done, totalTrendPct, completedThisWeek, dueThisWeek, assignedToMeTodoCount },
+    data: {
+      total: count('total'),
+      todo: count('todo'),
+      inProgress: count('inProgress'),
+      done: count('done'),
+      totalTrendPct,
+      completedThisWeek: count('completedThisWeek'),
+      dueThisWeek: count('dueThisWeek'),
+      assignedToMeTodoCount: count('assignedToMeTodoCount'),
+    },
   });
 });
