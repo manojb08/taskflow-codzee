@@ -71,6 +71,7 @@ Technical decisions, assumptions, alternatives considered, and tradeoffs made wh
 
 **Dashboard stats moved from 4 lightweight `GET /tasks?limit=1` calls to a dedicated `GET /tasks/stats/summary` endpoint.**
 - The original build reused the list endpoint's pagination metadata to avoid a new endpoint for four numbers. Once the dashboard needed derived metrics that aren't a simple count (a week-over-week trend, "due this week", "assigned to you") — see "Round 2" — a single aggregation endpoint became the simpler option rather than bolting date-range query params onto the general-purpose list endpoint.
+- The endpoint counts every metric in one `$facet` aggregation rather than nine parallel `countDocuments()` calls: one database round trip, with each metric still declared as the same plain filter. Trade-off: `$facet` sub-pipelines can't use indexes, so it's a single collection scan. That's fine at a small team's task volume; on a much larger collection, separate index-backed counts would be faster again.
 
 ## Round 2 — features added beyond §5 requirements
 
