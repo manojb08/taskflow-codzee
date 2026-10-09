@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { Types } from 'mongoose';
 import { createApp } from '../../src/app';
 import { Task } from '../../src/models/Task';
 import { createAuthedUser } from '../utils/testAuth';
@@ -104,6 +105,64 @@ describe('Dashboard stats', () => {
 
     expect(res.body.data.done).toBe(2);
     expect(res.body.data.completedThisWeek).toBe(1);
+  });
+
+  it('counts dueThisWeek as open tasks due within the next 7 days', async () => {
+    const { token } = await createAuthedUser(app);
+    const inDays = (days: number) => new Date(Date.now() + days * DAY_MS).toISOString();
+
+    const seedTasks = [
+      { title: 'Due in 3 days', dueDate: inDays(3) },
+      { title: 'Due in 3 days, already done', dueDate: inDays(3), status: 'done' },
+      { title: 'Due in 10 days', dueDate: inDays(10) },
+      { title: 'Overdue', dueDate: inDays(-2) },
+      { title: 'No due date' },
+    ];
+    for (const t of seedTasks) {
+      await request(app).post('/api/v1/tasks').set('Authorization', `Bearer ${token}`).send(t);
+    }
+
+    const res = await request(app)
+      .get('/api/v1/tasks/stats/summary')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.data.dueThisWeek).toBe(1);
+  });
+
+  it('reports the week-over-week trend in created tasks, or null with no previous week', async () => {
+    const { token } = await createAuthedUser(app);
+    const createTask = async (title: string) => {
+      const res = await request(app).post('/api/v1/tasks').set('Authorization', `Bearer ${token}`).send({ title });
+      return res.body.data.task._id as string;
+    };
+    const getStats = () => request(app).get('/api/v1/tasks/stats/summary').set('Authorization', `Bearer ${token}`);
+
+    for (const title of ['This week 1', 'This week 2', 'This week 3']) {
+      await createTask(title);
+    }
+    expect((await getStats()).body.data.totalTrendPct).toBeNull();
+
+    // Mongoose treats createdAt as immutable, so backdate through the driver.
+    const lastWeek = [await createTask('Last week 1'), await createTask('Last week 2')];
+    await Task.collection.updateMany(
+      { _id: { $in: lastWeek.map((id) => new Types.ObjectId(id)) } },
+      { $set: { createdAt: new Date(Date.now() - 10 * DAY_MS) } },
+    );
+
+    const res = await getStats();
+    expect(res.body.data.total).toBe(5);
+    expect(res.body.data.totalTrendPct).toBe(50); // 3 created this week vs 2 the week before
+  });
+
+  it('counts in_review and blocked tasks in the total only', async () => {
+    const { token } = await createAuthedUser(app);
+    for (const status of ['in_review', 'blocked']) {
+      await request(app).post('/api/v1/tasks').set('Authorization', `Bearer ${token}`).send({ title: status, status });
+    }
+
+    const res = await request(app)
+      .get('/api/v1/tasks/stats/summary')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.data).toMatchObject({ total: 2, todo: 0, inProgress: 0, done: 0, assignedToMeTodoCount: 0 });
   });
 
   it('rejects unauthenticated requests', async () => {
