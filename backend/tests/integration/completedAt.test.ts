@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 import { createApp } from '../../src/app';
 import { Task } from '../../src/models/Task';
 import { ActivityLog } from '../../src/models/ActivityLog';
-import { backfillCompletedAt } from '../../src/utils/backfillCompletedAt';
+import { backfillCompletedAt, stampCompletedAt } from '../../src/utils/backfillCompletedAt';
 import { createAuthedUser } from '../utils/testAuth';
 
 const app = createApp();
@@ -98,5 +98,28 @@ describe('backfillCompletedAt', () => {
 
     // Re-running finds nothing left to do.
     expect(await backfillCompletedAt()).toBe(0);
+  });
+
+  it('does not stamp a task that was reopened or completed since the backfill looked it up', async () => {
+    const { user } = await createAuthedUser(app);
+    const creator = new Types.ObjectId(user._id as string);
+    const completedForReal = new Date('2026-10-01T10:00:00.000Z');
+    const staleDate = new Date('2026-08-01T10:00:00.000Z');
+
+    const base = { priority: 'medium', creator, createdAt: staleDate, updatedAt: staleDate };
+    const { insertedIds } = await Task.collection.insertMany([
+      { ...base, title: 'Reopened since', status: 'in_progress' },
+      { ...base, title: 'Completed since', status: 'done', completedAt: completedForReal },
+    ]);
+    const [reopenedId, completedId] = [0, 1].map((i) => new Types.ObjectId(insertedIds[i].toHexString()));
+
+    expect(await stampCompletedAt(reopenedId, staleDate)).toBe(false);
+    expect(await stampCompletedAt(completedId, staleDate)).toBe(false);
+
+    const [reopened, completed] = await Promise.all(
+      [reopenedId, completedId].map((_id) => Task.collection.findOne({ _id })),
+    );
+    expect(reopened?.completedAt).toBeUndefined();
+    expect(completed?.completedAt).toEqual(completedForReal);
   });
 });
